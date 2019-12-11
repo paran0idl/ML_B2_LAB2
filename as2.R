@@ -51,7 +51,6 @@ predict(real_mod,as.matrix(x_test),type="class")
 library(kernlab)
 
 data <- read_delim("data/data.csv", ";", escape_double = FALSE, trim_ws = TRUE)
-data<-read.csv("data/data.csv")
 data
 x=data[,-4703]
 y=data[[4703]]
@@ -67,5 +66,35 @@ pred<-predict(mod,test[,-4703])
 pred
 
 
-t<-t.test(Conference~.,data=train)
+x=as.matrix(data[,-4703])
+y=as.factor(data[[4703]])
+
+df<-data.frame(name=c(),pvalue=c())
+
+for(i in 1:ncol(x)){
+  tmpv<-t.test(x[,i]~y,alternative="two.sided",conf.level=0.95)$p.value
+  tdf<-data.frame(name=colnames(x)[i],pvalue=tmpv)
+  df<-rbind(df,tdf)
+}
+df<-df[order(df$pvalue),] 
+
+#df[1:10,]
+length(which(df$pvalue>0.05))
+new_pvalue<-p.adjust(df$pvalue,method = "BH")
+new_pvalue
+length(which(new_pvalue>0.05))
+
+n=length(df$pvalue)
+lp=length(df$pvalue)
+
+i <- lp:1L
+o<-order(df$pvalue,decreasing = TRUE)
+ro<-order(o)
+
+o <- order(p, decreasing = TRUE)
+
+ro <- order(o)
+
+pmin(1, cummin( n / i * df$pvalue[o] ))[ro]
+
 
