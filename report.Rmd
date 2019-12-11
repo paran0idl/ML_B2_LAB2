@@ -48,15 +48,21 @@ res=gam(Mortality~Year+s(Year,k=length(unique(data$Year)))+s(Week,k=length(uniqu
 plot(res)
 ```
 
+The red line is observed mortality and the blue line represents predict values. From the spline plot, we can observe that the value perform a stright line, which means there is not a trend for mortality between years, however, there is a strong connection between week and number of mortality, in the begining and end of the year, which indicate the winter of a year, the value maintains at a relatively high level.
+
+
 ### 4. Examine how the penalty factor of the spline function in the GAM model from step 2 influences the estimated deviance of the model. Make plots of the predicted and observed mortality against time for cases of very high and very low penalty factors. What is the relation of the penalty factor to the degrees of freedom? Do your results confirm this relationship?
 
 ```{r,echo=FALSE}
+res$sp
 res=gam(Mortality~Year+s(Week,k=length(unique(data$Week)),sp=1000),method ="GCV.Cp" ,data=data)
 plot(res)
 
 res=gam(Mortality~Year+s(Week,k=length(unique(data$Week)),sp=0.00000001),method ="GCV.Cp" ,data=data)
 plot(res)
 ```
+
+In the previous model, we got the sp value which is the penalty factor for spline function. The sp value for week is 1.131922e-04, with the optimal value, we choose 1000 as very high and 0.00000001 as very low values for sp.
 
 ### 5. Use the model obtained in step 2 and plot the residuals and the influenza values against time (in one plot). Is the temporal pattern in the residuals correlated to the outbreaks of influenza?
 
