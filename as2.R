@@ -1,5 +1,6 @@
 library(readr)
 data <- read_delim("data/data.csv", ";", escape_double = FALSE, trim_ws = TRUE)
+#data<-read.csv2("data/data.csv")
 library(pamr)
 RNGversion("3.5.1")
 
@@ -41,30 +42,31 @@ x_test<-test[,-4703]
 y_test<-test[[4703]]
 
 mod<-cv.glmnet(as.matrix(x),y,alpha=0.5,family="binomial")
-mod$lambda.1se
 penalty_min<-mod$lambda.min
 penalty_min
 real_mod<-glmnet(as.matrix(x),y,alpha=0.5,lambda = penalty_min,family="binomial")
-predict(real_mod,as.matrix(x_test),type="class")
-
+pred<-predict(real_mod,as.matrix(x_test),type="class")
+cft<-table(pred,y_test)
+cft
 
 library(kernlab)
 
-data <- read_delim("data/data.csv", ";", escape_double = FALSE, trim_ws = TRUE)
+#data <- read_delim("data/data.csv", ";", escape_double = FALSE, trim_ws = TRUE)
+data<-read.csv2("data/data.csv",check.names = FALSE)
+names(data)<-iconv(names(data),to="ASCII")
 data
 x=data[,-4703]
+x=as.matrix(x)
 y=data[[4703]]
-y
-fit<-ksvm(x,y,kernel="vanilladot")
 
-fit
 
-library(e1071)
-mod<-svm(Conference~.,data=train,kernel="vanilladot")
-summary(mod)
-pred<-predict(mod,test[,-4703])
+fit<-ksvm(x,y,data=train,kernel="vanilladot",type="C-svc",scale=FALSE)
+pred<-predict(fit,x_test,type="response")
 pred
-
+cft<-table(pred,y_test)
+cft
+mis_rate<-1-(cft[1,1]+cft[2,2])/sum(cft)
+mis_rate
 
 x=as.matrix(data[,-4703])
 y=as.factor(data[[4703]])
@@ -78,8 +80,20 @@ for(i in 1:ncol(x)){
 }
 df<-df[order(df$pvalue),] 
 
+a=0.05
+max_i=1
+for(i in 1:length(df$pvalue)){
+  if(df$pvalue[i]<=a*i/length(df$pvalue)){
+    max_i=i
+  }
+}
+max_i
+
+
 #df[1:10,]
 length(which(df$pvalue>0.05))
+df$pvalue<-p.adjust(df$pvalue,method="BH")
+length(which(df$pvalue<0.05))
 new_pvalue<-p.adjust(df$pvalue,method = "BH")
 new_pvalue
 length(which(new_pvalue>0.05))

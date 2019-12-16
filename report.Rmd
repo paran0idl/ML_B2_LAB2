@@ -1,5 +1,5 @@
 ---
-title: "Report"
+title: "Computer lab 2 block 2"
 author: "Zuxiang Li"
 date: "12/10/2019"
 output: pdf_document
@@ -10,6 +10,8 @@ knitr::opts_chunk$set(echo = TRUE)
 library(ggplot2)
 library(readxl)
 library(mgcv)
+library(pamr)
+library(kernlab)
 ```
 
 # Assignment 1. Using GAM and GLM to examine the mortality rates
@@ -18,11 +20,13 @@ The Excel document influenza.xlsx contains weekly data on the mortality and the 
 
 ### 1. Use time series plots to visually inspect how the mortality and influenza number vary with time (use Time as X axis). By using this plot, comment how the amounts of influenza cases are related to mortality rates.
 
-```{r,ehco=FALSE}
+```{r,echo=FALSE,fig.align='center',out.height='40%'}
+
 data<-read_xlsx("data/influenza.xlsx")
 
 ggplot(data=data)+geom_line(aes(x=Time,y=Mortality),col="red")+
   geom_line(aes(x=Time,y=Influenza),col="blue")+ylab("Number")
+
 ```
 
 The red line in the plot represents mortality, and the blue line represents influenza varies with time. We can observe from the plot that every time influenza breaks out, there must be a drastic increase in mortality.
@@ -37,9 +41,11 @@ summary(res)
 #ggplot()+geom_line(aes(x=data$Time,y=pred),col="blue")+geom_line(aes(x=data$Time,y=data$Mortality),col="red")
 ```
 
+The model here we build is accroding to $Mortality = Year + s(Week)$, Week is the spline function.
+
 ### 3. Plot predicted and observed mortality against time for the fitted model and comment on the quality of the fit. Investigate the output of the GAM model and report which terms appear to be significant in the model. Is there a trend in mortality change from one year to another? Plot the spline component and interpret the plot.
 
-```{r,echo=FALSE}
+```{r,echo=FALSE,fig.align='center',out.height='40%'}
 pred=predict.gam(res,data)
 
 ggplot()+geom_line(aes(x=data$Time,y=pred),col="blue")+geom_line(aes(x=data$Time,y=data$Mortality),col="red")
@@ -53,8 +59,7 @@ The red line is observed mortality and the blue line represents predict values. 
 
 ### 4. Examine how the penalty factor of the spline function in the GAM model from step 2 influences the estimated deviance of the model. Make plots of the predicted and observed mortality against time for cases of very high and very low penalty factors. What is the relation of the penalty factor to the degrees of freedom? Do your results confirm this relationship?
 
-```{r,echo=FALSE}
-res$sp
+```{r,echo=FALSE,fig.align='center',out.height='40%'}
 res=gam(Mortality~Year+s(Week,k=length(unique(data$Week)),sp=1000),method ="GCV.Cp" ,data=data)
 plot(res)
 
@@ -62,11 +67,11 @@ res=gam(Mortality~Year+s(Week,k=length(unique(data$Week)),sp=0.00000001),method 
 plot(res)
 ```
 
-In the previous model, we got the sp value which is the penalty factor for spline function. The sp value for week is 1.131922e-04, with the optimal value, we choose 1000 as very high and 0.00000001 as very low values for sp.
+In the previous model, we got the sp value which is the penalty factor for spline function. The sp value for week is 1.131922e-04, with the optimal value, we choose 1000 as very high and 0.00000001 as very low values for sp. With the higher penalty, the estimated degrees of freedom will get closer to 1, this means the model is underfitted. Otherwise, the degrees of freedom gets higher with lower penalty, the model tends to be overfitted. 
 
 ### 5. Use the model obtained in step 2 and plot the residuals and the influenza values against time (in one plot). Is the temporal pattern in the residuals correlated to the outbreaks of influenza?
 
-```{r,echo=FALSE}
+```{r,echo=FALSE,fig.align='center',out.height='40%'}
 
 res=gam(Mortality~Year+s(Week,k=length(unique(data$Week))),method ="GCV.Cp" ,data=data)
 pred=predict.gam(res,data)
@@ -76,9 +81,11 @@ ggplot()+geom_point(aes(x=data$Year,y=res),col="red")+geom_point(aes(x=data$Year
 
 ```
 
+There is no obvious correlation between residuals and influenza
+
 ### 6. Fit a GAM model in R in which mortality is be modelled as an additive function of the spline functions of year, week, and the number of confirmed cases of influenza. Use the output of this GAM function to conclude whether or not the mortality is influenced by the outbreaks of influenza. Provide the plot of the original and fitted Mortality against Time and comment whether the model seems to be better than the previous GAM models.
 
-```{r,echo=FALSE}
+```{r,echo=FALSE,fig.align='center',out.height='40%'}
 res=gam(Mortality~s(Year,k=length(unique(data$Year)))+s(Week,k=length(unique(data$Week)))+s(Influenza,k=length(unique(data$Influenza))),method ="GCV.Cp" ,data=data)
 summary(res)
 pred=predict.gam(res,data)
@@ -87,17 +94,263 @@ ggplot()+geom_line(aes(x=data$Time,y=pred),col="blue")+geom_line(aes(x=data$Time
 
 ```
 
+Since we took influenza into consideration, the model fits better compare to the previous one.
+
 # Assignment 2. High-dimensional methods
 
 The data file data.csv contains information about 64 e-mails which were manually collected from DBWorld mailing list. They were classified as: 'announces of conferences' (1) and 'everything else' (0) (variable Conference)
 
 ### 1. Divide data into training and test sets (70/30) without scaling. Perform nearest shrunken centroid classification of training data in which the threshold is chosen by cross-validation. Provide a centroid plot and interpret it. How many features were selected by the method? List the names of the 10 most contributing features and comment whether it is reasonable that they have strong effect on the discrimination between the conference mails and other mails? Report the test error.
-```{r}
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE,fig.align='center',out.height='40%'}
+data<-read.csv2("data/data.csv",check.names = FALSE)
+names(data)<-iconv(names(data),to="ASCII")
+RNGversion("3.5.1")
+
+n=dim(data)[1] 
+set.seed(12345) 
+id=sample(1:n, floor(n*0.7)) 
+train=data[id,] 
+test=data[-id,]
+
+x<-t(train[,-4703])
+
+y<-train[[4703]]
+
+
+x_test<-t(test[,-4703])
+
+y_test<-test[[4703]]
+
+my_data<-list(x=x,y=as.factor(y),geneid=as.character(1:nrow(x)),genenames=rownames(x))
+my_data_test<-list(x=x_test,y=as.factor(y_test),geneid=as.character(1:nrow(x_test)),genenames=rownames(x_test))
+
+mod<-pamr.train(my_data,threshold = seq(0,4,0.1))
+cvmodel<-pamr.cv(mod,my_data)
+
+thr<-cvmodel$threshold[which.min(cvmodel$error)]
+pamr.plotcv(cvmodel)
+pred<-pamr.predict(mod,my_data_test$x,threshold = thr,type="class")
+pamr.plotcen(mod,my_data,thr)
+
+#res<-as.data.frame(pamr.listgenes(mod,my_data,thr,genenames = TRUE))
+#listgene
+#my_data$genenames[as.numeric(listgene)]
 
 ```
+
+We get the threshold is 1.3 with using cross-validation. From the centroid plot we can see the contribution of each word made to the result(conference or not). There are 693 features selected in total. The 10 most contributing features are "papers", "important", "submission", "due", "published", "position", "call", "conference", "dates", "candidates". It's clear that these word have a strong connection to conference. The test error is 5%.
+
 ### 2. Compute the test error and the number of the contributing features for the following methods fitted to the training data:
-a. Elastic net with the binomial response and 𝛼𝛼 = 0.5 in which penalty is selected by the cross-validation
+
+a. Elastic net with the binomial response and = 0.5 in which penalty is selected by the cross-validation
+```{r,echo=FALSE,message=FALSE,fig.align='center',out.height='40%'}
+library(glmnet)
+
+x<-train[,-4703]
+y<-train[[4703]]
+
+x_test<-test[,-4703]
+y_test<-test[[4703]]
+
+mod<-cv.glmnet(as.matrix(x),y,alpha=0.5,family="binomial")
+plot(mod)
+penalty_min<-mod$lambda.min
+real_mod<-glmnet(as.matrix(x),y,alpha=0.5,lambda = penalty_min,family="binomial")
+pred<-predict(real_mod,as.matrix(x_test),type="class")
+cft<-table(pred,y_test)
+mis_rate<-1-(cft[1,1]+cft[2,2])/sum(cft)
+cat(mis_rate*100,"%")
+```
 b. Support vector machine with “vanilladot” kernel.
+
+```{r,echo=FALSE,message=FALSE}
+fit<-ksvm(as.matrix(x),y,data=train,kernel="vanilladot",type="C-svc",scale=FALSE)
+pred<-predict(fit,x_test,type="response")
+
+cft<-table(pred,y_test)
+
+mis_rate<-1-(cft[1,1]+cft[2,2])/sum(cft)
+cat(mis_rate*100,"%")
+```
+
 Compare the results of these models with the results of the nearest shrunken centroids (make a comparative table). Which model would you prefer and why?
 
+Error rate for Elastic net is 10% and for SVM is 5%. In this case we prefer to use SVM since it ignores the effect of high-dimensional data and it provides the lowest misclassfication rate.
+
 ### 3. Implement Benjamini-Hochberg method for the original data, and use t.test() for computing p-values. Which features correspond to the rejected hypotheses? Interpret the result.
+
+```{r,echo=FALSE,fig.align='center',out.height='40%'}
+x=as.matrix(data[,-4703])
+y=as.factor(data[[4703]])
+
+df<-data.frame(name=c(),pvalue=c())
+
+for(i in 1:ncol(x)){
+  tmpv<-t.test(x[,i]~y,alternative="two.sided",conf.level=0.95)$p.value
+  tdf<-data.frame(name=colnames(x)[i],pvalue=tmpv)
+  df<-rbind(df,tdf)
+}
+df<-df[order(df$pvalue),] 
+
+a=0.05
+max_i=1
+for(i in 1:length(df$pvalue)){
+  if(df$pvalue[i]<=a*i/length(df$pvalue)){
+    max_i=i
+  }
+}
+ggplot()+geom_point(aes(x=c(1:length(df$pvalue)),y=df$pvalue),col="red")+geom_vline(xintercept = 39)
+print(max_i)
+
+df[1:39,]
+```
+
+There are 39 features correspond to the rejected hypotheses with $\alpha=0.05$. 
+
+
+\newpage
+
+# Appendix
+
+### Assignment 1
+
+#### 1.
+```{r,eval=FALSE}
+data<-read_xlsx("data/influenza.xlsx")
+
+ggplot(data=data)+geom_line(aes(x=Time,y=Mortality),col="red")+
+  geom_line(aes(x=Time,y=Influenza),col="blue")+ylab("Number")
+
+```
+
+#### 2.
+```{r,eval=FALSE}
+res=gam(Mortality~Year+s(Week,k=length(unique(data$Week))),method ="GCV.Cp" ,data=data)
+```
+
+#### 3.
+```{r,eval=FALSE}
+pred=predict.gam(res,data)
+
+ggplot()+geom_line(aes(x=data$Time,y=pred),col="blue")+geom_line(aes(x=data$Time,y=data$Mortality),col="red")
+
+res=gam(Mortality~Year+s(Year,k=length(unique(data$Year)))+s(Week,k=length(unique(data$Week))),method ="GCV.Cp" ,data=data)
+plot(res)
+```
+
+#### 4.
+```{r,eval=FALSE}
+res=gam(Mortality~Year+s(Week,k=length(unique(data$Week)),sp=1000),method ="GCV.Cp" ,data=data)
+plot(res)
+
+res=gam(Mortality~Year+s(Week,k=length(unique(data$Week)),sp=0.00000001),method ="GCV.Cp" ,data=data)
+plot(res)
+```
+
+#### 5.
+```{r,eval=FALSE}
+res=gam(Mortality~Year+s(Week,k=length(unique(data$Week))),method ="GCV.Cp" ,data=data)
+pred=predict.gam(res,data)
+res=data$Mortality-pred
+
+ggplot()+geom_point(aes(x=data$Year,y=res),col="red")+geom_point(aes(x=data$Year,y=data$Influenza),col="blue")
+```
+
+#### 6.
+```{r,eval=FALSE}
+res=gam(Mortality~s(Year,k=length(unique(data$Year)))+s(Week,k=length(unique(data$Week)))+s(Influenza,k=length(unique(data$Influenza))),method ="GCV.Cp" ,data=data)
+summary(res)
+pred=predict.gam(res,data)
+
+ggplot()+geom_line(aes(x=data$Time,y=pred),col="blue")+geom_line(aes(x=data$Time,y=data$Mortality),col="red")s(x=Time,y=Influenza),col="blue")+ylab("Number")
+```
+
+### Assignment 2
+
+#### 1.
+```{r,eval=FALSE}
+data<-read.csv2("data/data.csv",check.names = FALSE)
+names(data)<-iconv(names(data),to="ASCII")
+RNGversion("3.5.1")
+
+n=dim(data)[1] 
+set.seed(12345) 
+id=sample(1:n, floor(n*0.7)) 
+train=data[id,] 
+test=data[-id,]
+
+x<-t(train[,-4703])
+
+y<-train[[4703]]
+
+
+x_test<-t(test[,-4703])
+
+y_test<-test[[4703]]
+
+my_data<-list(x=x,y=as.factor(y),geneid=as.character(1:nrow(x)),genenames=rownames(x))
+my_data_test<-list(x=x_test,y=as.factor(y_test),geneid=as.character(1:nrow(x_test)),genenames=rownames(x_test))
+
+mod<-pamr.train(my_data,threshold = seq(0,4,0.1))
+cvmodel<-pamr.cv(mod,my_data)
+
+thr<-cvmodel$threshold[which.min(cvmodel$error)]
+pamr.plotcv(cvmodel)
+pred<-pamr.predict(mod,my_data_test$x,threshold = thr,type="class")
+pamr.plotcen(mod,my_data,thr)
+```
+
+#### 2.
+```{r,eval=FALSE}
+library(glmnet)
+
+x<-train[,-4703]
+y<-train[[4703]]
+
+x_test<-test[,-4703]
+y_test<-test[[4703]]
+
+mod<-cv.glmnet(as.matrix(x),y,alpha=0.5,family="binomial")
+penalty_min<-mod$lambda.min
+real_mod<-glmnet(as.matrix(x),y,alpha=0.5,lambda = penalty_min,family="binomial")
+pred<-predict(real_mod,as.matrix(x_test),type="class")
+cft<-table(pred,y_test)
+mis_rate<-1-(cft[1,1]+cft[2,2])/sum(cft)
+cat(mis_rate*100,"%")
+
+fit<-ksvm(as.matrix(x),y,data=train,kernel="vanilladot",type="C-svc",scale=FALSE)
+pred<-predict(fit,x_test,type="response")
+
+cft<-table(pred,y_test)
+
+mis_rate<-1-(cft[1,1]+cft[2,2])/sum(cft)
+cat(mis_rate*100,"%")
+```
+
+#### 3.
+```{r,eval=FALSE}
+x=as.matrix(data[,-4703])
+y=as.factor(data[[4703]])
+
+df<-data.frame(name=c(),pvalue=c())
+
+for(i in 1:ncol(x)){
+  tmpv<-t.test(x[,i]~y,alternative="two.sided",conf.level=0.95)$p.value
+  tdf<-data.frame(name=colnames(x)[i],pvalue=tmpv)
+  df<-rbind(df,tdf)
+}
+df<-df[order(df$pvalue),] 
+
+a=0.05
+max_i=1
+for(i in 1:length(df$pvalue)){
+  if(df$pvalue[i]<=a*i/length(df$pvalue)){
+    max_i=i
+  }
+}
+ggplot()+geom_point(aes(x=c(1:length(df$pvalue)),y=df$pvalue),col="red")+geom_vline(xintercept = 39)
+print(max_i)
+
+df[1:39,]
+```
